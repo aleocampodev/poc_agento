@@ -19,7 +19,9 @@
   }
 
   & a:hover {
-    opacity: 0.85;
+    opacity: 1;
+    background-color: #fce7f1 !important;
+    border-color: var(--nenufar-brand, #e91e8c) !important;
   }
 }
 

@@ -86,7 +86,7 @@ export function MobileMenu({ menu, categories = [] }: Props) {
               onClick={closeMobileMenu}
               className="flex items-center group py-1"
             >
-              <LogoIcon variant="color" className="h-8 w-auto shrink-0 inline-block" />
+              <LogoIcon variant="color" className="h-7 w-auto shrink-0 inline-block" />
             </Link>
           </SheetTitle>
         </SheetHeader>

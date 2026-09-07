@@ -28,7 +28,7 @@ export async function Footer() {
           {/* Columna 1: Marca & Filosofía */}
           <div className="space-y-4">
             <Link className="flex items-center group py-1" href="/">
-              <LogoIcon variant="blanco" className="h-9 sm:h-10 w-auto shrink-0 transition-transform group-hover:scale-105" />
+              <LogoIcon variant="blanco-horizontal" className="h-7 sm:h-8 w-auto shrink-0 transition-transform group-hover:scale-105" />
             </Link>
             <p className="text-purple-100/90 text-xs sm:text-sm leading-relaxed font-light">
               Joyería de autor tejida a mano con mostacilla calibrada y filigrana en Cartagena de Indias. Piezas con alma caribeña hechas para perdurar.

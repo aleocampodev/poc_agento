@@ -79,8 +79,8 @@ export function HeaderClient({ header, categories = [] }: Props) {
           {/* Brand Logo */}
           <Link href="/" className="flex items-center group py-1">
             <LogoIcon
-              variant={isTransparent ? 'color' : 'blanco'}
-              className="h-9 sm:h-10 w-auto max-h-[42px] shrink-0 transition-transform duration-300 group-hover:scale-105"
+              variant={isTransparent ? 'color' : 'blanco-horizontal'}
+              className="h-7 sm:h-8 w-auto max-h-[34px] shrink-0 transition-transform duration-300 group-hover:scale-105"
             />
           </Link>
 
