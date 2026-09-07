@@ -337,7 +337,7 @@ export const KraftiProductTile: React.FC<Props> = ({ product, index, layoutMode 
             disabled={isLoading || isPending}
             className={`px-5 sm:px-6 py-2 sm:py-2.5 rounded-full text-[11px] uppercase tracking-wider font-medium shadow-md border active:scale-[0.96] transition-all duration-300 flex items-center gap-1.5 cursor-pointer pointer-events-auto ${
               isDark
-                ? 'bg-[#DFC188] text-[#3B032F] hover:bg-white hover:text-[#3B032F] border-transparent font-semibold shadow-lg'
+                ? 'bg-brand hover:bg-brand-dark text-white border-transparent font-semibold shadow-lg'
                 : 'bg-brand hover:bg-brand-dark text-white border-white/20'
             }`}
           >

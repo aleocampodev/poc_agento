@@ -3,15 +3,12 @@ import React from 'react'
 export const Logo = () => {
   return (
     /* eslint-disable @next/next/no-img-element */
-    <div className="flex items-center gap-3 py-1">
+    <div className="flex items-center py-1">
       <img
         alt="Nenúfar Logo"
-        className="h-10 w-auto object-contain max-h-10"
-        src="/nenufar-negro.svg"
+        className="h-8 w-auto object-contain max-h-8"
+        src="/nenufar-logo.svg"
       />
-      <span className="font-serif text-xl font-bold tracking-tight text-brand">
-        Nenúfar
-      </span>
     </div>
   )
 }

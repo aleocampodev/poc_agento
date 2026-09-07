@@ -81,20 +81,20 @@ export const UpcomingEventsBlock: Block = {
             {
               name: "googleCalendarIcalUrl",
               type: "text",
-              label: "Enlace iCal de Google Calendar de Shirley (.ics)",
+              label: "Enlace iCal de Google Calendar de Shirley (.ics) — opcional",
               admin: {
                 description:
-                  "Pega aquí el enlace iCal público o secreto de tu Google Calendar. Si lo dejas vacío, se usará la variable GOOGLE_CALENDAR_ICAL_URL del entorno o la lista manual inferior.",
+                  "Solo si quieres que los eventos de tu Google Calendar aparezcan en la web. Si lo dejas vacío, la web muestra únicamente lo que agregues en la lista inferior y tu calendario personal nunca se mezcla.",
               },
             },
             {
               name: "syncWithGoogleCalendar",
               type: "checkbox",
-              label: "Sincronizar automáticamente con Google Calendar de Shirley",
-              defaultValue: true,
+              label: "Mostrar eventos de mi Google Calendar en la web",
+              defaultValue: false,
               admin: {
                 description:
-                  "Si está activo y hay un enlace iCal configurado, el calendario se actualizará solo cuando Shirley agregue o edite eventos en Google Calendar.",
+                  "Apagado por defecto. Al revés sí funciona siempre: lo que agregues en la lista inferior se publica solo en tu Google Calendar si lo suscribes en calendar.google.com → Otros calendarios → Desde URL con /api/calendar/feed.",
               },
             },
             {

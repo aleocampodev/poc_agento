@@ -26,6 +26,56 @@ const TIMEOUT_MS = 120_000
 /** Ventana máxima de mensajes previos para memoria conversacional. */
 const MAX_HISTORY_MESSAGES = 4
 
+/** Tools destructivas: requieren confirmación explícita de Shirley (HITL). */
+const DESTRUCTIVE_TOOLS = new Set([
+  'eliminarEvento',
+  'eliminarFotoGaleria',
+  'eliminarTestimonio',
+  'confirmarPedido',
+])
+
+/** Tiempo de vida de una confirmación pendiente antes de cancelarse sola. */
+const PENDING_TTL_MS = 5 * 60_000
+
+/** Topes invisibles de tamaño para no quemar tokens en entradas/salidas largas. */
+const INPUT_MAX_CHARS = 1000
+const TOOL_RESULT_MAX_CHARS = 2000
+
+/** Presupuesto diario (Groq gpt-oss-120b free: 200K TPD). */
+const DAILY_WARN_TOKENS = 150_000
+const DAILY_PARK_TOKENS = 190_000
+
+/** Cadena de failover explícita (espejo de litellm/config.yaml). */
+const MODEL_CHAIN = ['nenufar-bot', 'nenufar-bot-20b', 'nenufar-bot-qwen36', 'nenufar-bot-qwen38']
+
+/** Reintentos ante 429/5xx con backoff. */
+const MAX_GATEWAY_ATTEMPTS = 3
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 529])
+
+/** Circuit breaker ante saturación sostenida del tier gratuito. */
+const CIRCUIT_FAIL_THRESHOLD = 3
+const CIRCUIT_BREAKER_MS = 5 * 60_000
+
+/** Confirmación relajada en lenguaje natural (no tediosa). */
+const CONFIRM_RE = /^(s[ií]|s[ií] por favor|confirmo|dale|ok|yes|listo)\b/i
+const CANCEL_RE = /^(no|cancela|mejor no|déjalo|dejalo)\b/i
+
+interface PendingConfirmation {
+  toolName: string
+  args: Record<string, any>
+  summary: string
+  expiresAt: number
+}
+
+// Single-instance in-memory guards (same criterion as webhook dedupe:
+// sufficient for the current single-node deployment, never a billing risk
+// since the only caller is the single-admin Telegram webhook).
+const pendingConfirmations = new Map<number, PendingConfirmation>()
+let circuitOpenUntil = 0
+let consecutiveGatewayFailures = 0
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
 /** Herramientas operativas cuyos mensajes de salida ya están formateados en lenguaje natural para Shirley. */
 const DIRECT_REPLY_TOOLS = new Set([
   'buscarProducto',
@@ -229,6 +279,51 @@ async function recordTrace(
 }
 
 /**
+ * Suma los tokens consumidos hoy (UTC, ventana de reset de Groq) leyendo
+ * agent-traces. Base del presupuesto diario invisible.
+ */
+export async function getDailyTokenUsage(
+  payload: Payload,
+): Promise<{ total: number; lite: boolean; parked: boolean }> {
+  try {
+    const start = new Date()
+    start.setUTCHours(0, 0, 0, 0)
+    const result = await payload.find({
+      collection: 'agent-traces' as any,
+      where: {
+        createdAt: { greater_than_equal: start.toISOString() },
+      },
+      pagination: false,
+      limit: 2000,
+      overrideAccess: true,
+    })
+    const total = (result.docs || []).reduce(
+      (acc: number, doc: any) => acc + Number(doc?.totalTokens || 0),
+      0,
+    )
+    return {
+      total,
+      lite: total >= DAILY_WARN_TOKENS,
+      parked: total >= DAILY_PARK_TOKENS,
+    }
+  } catch (err) {
+    payload.logger.warn({
+      msg: '[shirley-agent] No se pudo calcular el consumo diario, continuando sin presupuesto',
+      err: err instanceof Error ? err.message : String(err),
+    })
+    return { total: 0, lite: false, parked: false }
+  }
+}
+
+/** Mensaje cálido cuando la cuota gratuita del día se agota. */
+export const DAILY_PARK_MESSAGE =
+  'Shirley, por hoy agoté mi cuota gratuita del servicio. Puedes trabajar desde /admin y mañana seguimos normal 💜'
+
+/** Mensaje cálido cuando el gateway gratuito está saturado temporalmente. */
+export const CIRCUIT_BUSY_MESSAGE =
+  'Shirley, el servicio gratuito está saturado por unos minutos. Si es urgente revísalo en /admin y ya retomamos 💜'
+
+/**
  * Corre una consulta agéntica completa y devuelve el texto final para enviar
  * por Telegram. Nunca lanza: ante cualquier fallo devuelve AGENT_FALLBACK.
  */
@@ -313,7 +408,7 @@ export async function runShirleyAgent({
   let totalOutputTokens = 0
 
   const cleanPrompt = (() => {
-    const trimmed = text.trim()
+    const trimmed = text.trim().slice(0, INPUT_MAX_CHARS)
     if (trimmed === '/start' || trimmed === '/iniciar') {
       return 'Hola, soy Shirley. ¿Cómo estás y en qué me puedes ayudar hoy en la tienda?'
     }
@@ -332,8 +427,94 @@ export async function runShirleyAgent({
     text.trim() === '/reiniciar' ||
     text.trim() === '/reset'
 
+  if (isResetCommand) {
+    pendingConfirmations.delete(chatId)
+  }
+
+  // 0a. Circuit breaker: ante saturación sostenida no se queman tokens.
+  if (Date.now() < circuitOpenUntil) {
+    return CIRCUIT_BUSY_MESSAGE
+  }
+
+  // 0b. Presupuesto diario invisible (ventana UTC de Groq).
+  const dailyUsage = await getDailyTokenUsage(payload)
+  if (dailyUsage.parked) {
+    void recordTrace(payload, {
+      chatId,
+      query: text,
+      responseSummary: DAILY_PARK_MESSAGE,
+      toolsUsed: 'ninguna',
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      cost: '$0 USD (Groq Free Tier)',
+      executionTimeMs: Date.now() - startTime,
+      status: 'fallback',
+      errorMessage: `daily-budget-parked (${dailyUsage.total} tokens)`,
+      model: process.env.ANTHROPIC_MODEL || 'nenufar-bot',
+    })
+    return DAILY_PARK_MESSAGE
+  }
+  const liteMode = dailyUsage.lite
+  const effectiveMaxTurns = liteMode ? 1 : MAX_TURNS
+
+  // 0c. HITL: resolver una confirmación pendiente antes de cualquier llamada.
+  const pending = pendingConfirmations.get(chatId)
+  if (pending && !isResetCommand) {
+    if (Date.now() > pending.expiresAt) {
+      pendingConfirmations.delete(chatId)
+    } else if (CONFIRM_RE.test(cleanPrompt)) {
+      pendingConfirmations.delete(chatId)
+      const confirmedArgs = { ...pending.args, ...(mediaId ? { mediaId } : {}) }
+      const resultText = await executeShirleyTool(pending.toolName, confirmedArgs, payload)
+      void persistMessage(payload, {
+        chatId,
+        role: 'assistant',
+        content: resultText,
+        toolName: pending.toolName,
+      })
+      void recordTrace(payload, {
+        chatId,
+        query: text,
+        responseSummary: resultText,
+        toolsUsed: pending.toolName,
+        inputTokens: totalInputTokens,
+        outputTokens: totalOutputTokens,
+        totalTokens: totalInputTokens + totalOutputTokens,
+        cost: '$0 USD (Groq Free Tier)',
+        executionTimeMs: Date.now() - startTime,
+        status: 'success',
+        model: process.env.ANTHROPIC_MODEL || 'nenufar-bot',
+      })
+      return resultText
+    } else if (CANCEL_RE.test(cleanPrompt)) {
+      pendingConfirmations.delete(chatId)
+      const cancelReply = 'Entendido Shirley, lo dejé como estaba, no eliminé ni cambié nada 💜'
+      void persistMessage(payload, { chatId, role: 'assistant', content: cancelReply })
+      void recordTrace(payload, {
+        chatId,
+        query: text,
+        responseSummary: cancelReply,
+        toolsUsed: 'ninguna',
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        cost: '$0 USD (Groq Free Tier)',
+        executionTimeMs: Date.now() - startTime,
+        status: 'fallback',
+        errorMessage: 'HITL: confirmation-cancelled by Shirley',
+        model: process.env.ANTHROPIC_MODEL || 'nenufar-bot',
+      })
+      return cancelReply
+    } else {
+      // Cualquier otro mensaje sustituye la confirmación pendiente (no tedioso).
+      pendingConfirmations.delete(chatId)
+    }
+  }
+
   // 1. Cargar memoria previa de Supabase (o iniciar sesión limpia si envió /start)
-  const historyMessages = isResetCommand ? [] : await loadRecentHistory(payload, chatId)
+  // En modo lite se omite el historial para ahorrar tokens de entrada.
+  const historyMessages = isResetCommand || liteMode ? [] : await loadRecentHistory(payload, chatId)
   const system = buildSystemPrompt()
   const baseUrl = (process.env.ANTHROPIC_BASE_URL || 'http://localhost:4000').replace(/\/$/, '')
   const apiKey =
@@ -356,34 +537,81 @@ export async function runShirleyAgent({
   const forcedToolChoice = determineToolChoice(cleanPrompt, mediaId)
 
   try {
-    for (let turn = 0; turn < MAX_TURNS; turn++) {
+    for (let turn = 0; turn < effectiveMaxTurns; turn++) {
       const turnStart = Date.now()
       console.log(`⏱️ [agent] Llamando a LiteLLM Turno ${turn + 1}...`)
-      const response = await fetch(`${baseUrl}/v1/messages`, {
-        method: 'POST',
-        headers: {
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: 1024,
-          system,
-          messages,
-          tools: ANTHROPIC_SHIRLEY_TOOLS,
-          ...(turn === 0 && forcedToolChoice ? { tool_choice: forcedToolChoice } : {}),
-        }),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      })
-      console.log(`⏱️ [agent] LiteLLM Turno ${turn + 1} respondió en ${Date.now() - turnStart}ms (status: ${response.status})`)
 
-      if (!response.ok) {
-        const errorText = await response.text()
+      // Gateway call with silent retry + explicit model failover.
+      // Respects Groq retry-after, backs off with jitter, and advances
+      // through MODEL_CHAIN so a 429 on the big model falls to a smaller one.
+      let response: Response | null = null
+      let lastStatus = 0
+      let lastErrorText = ''
+      for (let attempt = 0; attempt < MAX_GATEWAY_ATTEMPTS; attempt++) {
+        const attemptModel = liteMode
+          ? 'nenufar-bot-20b'
+          : attempt === 0
+            ? model
+            : MODEL_CHAIN[attempt % MODEL_CHAIN.length]
+        try {
+          const res = await fetch(`${baseUrl}/v1/messages`, {
+            method: 'POST',
+            headers: {
+              'x-api-key': apiKey,
+              'anthropic-version': '2023-06-01',
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: attemptModel,
+              max_tokens: 1024,
+              system,
+              messages,
+              tools: ANTHROPIC_SHIRLEY_TOOLS,
+              ...(turn === 0 && forcedToolChoice ? { tool_choice: forcedToolChoice } : {}),
+            }),
+            signal: AbortSignal.timeout(TIMEOUT_MS),
+          })
+          console.log(
+            `⏱️ [agent] LiteLLM Turno ${turn + 1} respondió en ${Date.now() - turnStart}ms (status: ${res.status}, model: ${attemptModel})`,
+          )
+          if (res.ok) {
+            response = res
+            consecutiveGatewayFailures = 0
+            break
+          }
+          lastStatus = res.status
+          lastErrorText = await res.text()
+          if (!RETRYABLE_STATUS.has(res.status)) break
+          const retryAfterSec = Number(res.headers.get('retry-after'))
+          const backoffMs = Math.min(
+            (Number.isFinite(retryAfterSec) && retryAfterSec > 0
+              ? retryAfterSec * 1000
+              : 750 * 2 ** attempt) + Math.random() * 400,
+            12000,
+          )
+          payload.logger.warn({
+            msg: '[shirley-agent] Gateway saturado, reintentando en silencio',
+            status: res.status,
+            attempt: attempt + 1,
+            backoffMs: Math.round(backoffMs),
+          })
+          await sleep(backoffMs)
+        } catch (attemptErr) {
+          lastErrorText = attemptErr instanceof Error ? attemptErr.message : String(attemptErr)
+          if (attemptErr instanceof Error && attemptErr.name === 'TimeoutError') break
+          await sleep(Math.min(750 * 2 ** attempt + Math.random() * 400, 8000))
+        }
+      }
+
+      if (!response) {
+        consecutiveGatewayFailures++
+        if (consecutiveGatewayFailures >= CIRCUIT_FAIL_THRESHOLD) {
+          circuitOpenUntil = Date.now() + CIRCUIT_BREAKER_MS
+        }
         payload.logger.error({
-          msg: '[shirley-agent] Error en llamada a Anthropic/LiteLLM',
-          status: response.status,
-          errorText,
+          msg: '[shirley-agent] Error en llamada a Anthropic/LiteLLM tras reintentos',
+          status: lastStatus,
+          errorText: lastErrorText,
         })
 
         void recordTrace(payload, {
@@ -397,7 +625,7 @@ export async function runShirleyAgent({
           cost: '$0 USD (Groq Free Tier)',
           executionTimeMs: Date.now() - startTime,
           status: 'error',
-          errorMessage: `HTTP ${response.status}: ${errorText}`,
+          errorMessage: `HTTP ${lastStatus}: ${lastErrorText}`,
           model,
         })
 
@@ -417,6 +645,49 @@ export async function runShirleyAgent({
       // 1. Detectar invocaciones de herramientas (tool_use)
       const toolCalls = content.filter((item) => item.type === 'tool_use')
       if (toolCalls.length > 0) {
+        // HITL: ninguna tool destructiva se ejecuta sin el "sí" de Shirley.
+        // Si hay al menos una, se difiere TODO el turno y se pide confirmación
+        // en lenguaje natural (un solo turno extra, nada tedioso).
+        const destructiveCalls = toolCalls.filter((tc) => DESTRUCTIVE_TOOLS.has(tc.name))
+        if (destructiveCalls.length > 0) {
+          const summary = destructiveCalls
+            .map((tc) => {
+              const inputPreview = JSON.stringify(tc.input ?? {}).slice(0, 300)
+              return `• ${tc.name} ${inputPreview}`
+            })
+            .join('\n')
+          pendingConfirmations.set(chatId, {
+            toolName: destructiveCalls[0].name,
+            args: { ...(destructiveCalls[0].input ?? {}) },
+            summary,
+            expiresAt: Date.now() + PENDING_TTL_MS,
+          })
+          const confirmPrompt =
+            `Shirley, antes de hacerlo quiero confirmar:\n${summary}\n\n` +
+            `Respóndeme *sí* para confirmar o *no* para cancelar. (Se cancela solo en 5 minutos)`
+          void persistMessage(payload, {
+            chatId,
+            role: 'assistant',
+            content: confirmPrompt,
+            toolName: destructiveCalls.map((tc) => tc.name).join(', '),
+          })
+          void recordTrace(payload, {
+            chatId,
+            query: text,
+            responseSummary: confirmPrompt,
+            toolsUsed: destructiveCalls.map((tc) => tc.name).join(', '),
+            inputTokens: totalInputTokens,
+            outputTokens: totalOutputTokens,
+            totalTokens: totalInputTokens + totalOutputTokens,
+            cost: '$0 USD (Groq Free Tier)',
+            executionTimeMs: Date.now() - startTime,
+            status: 'fallback',
+            errorMessage: 'HITL: awaiting Shirley confirmation',
+            model,
+          })
+          return confirmPrompt
+        }
+
         messages.push({ role: 'assistant', content })
 
         const toolResults: Array<Record<string, any>> = []
@@ -426,11 +697,15 @@ export async function runShirleyAgent({
             ...(toolCall.input ?? {}),
             ...(mediaId ? { mediaId } : {}),
           }
-          const resultText = await executeShirleyTool(
+          let resultText = await executeShirleyTool(
             toolCall.name,
             toolArgs,
             payload,
           )
+          if (resultText.length > TOOL_RESULT_MAX_CHARS) {
+            resultText =
+              resultText.slice(0, TOOL_RESULT_MAX_CHARS) + '\n…(lista recortada, ver /admin)'
+          }
           toolResults.push({
             type: 'tool_result',
             tool_use_id: toolCall.id,

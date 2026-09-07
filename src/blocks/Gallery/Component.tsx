@@ -92,43 +92,25 @@ const FERIAS_IMAGES: GalleryImageItem[] = [
   },
 ]
 
-const TALLERES_IMAGES: GalleryImageItem[] = [
+const PREMIOS_IMAGES: GalleryImageItem[] = [
   {
-    id: 'taller-1',
-    title: 'Taller Vivencial de Comunidad',
-    src: '/media/talleres-comunidad-800x1000.webp',
-    alt: 'Taller presencial de tejido de mostacilla con Shirley en Cartagena',
+    id: 'premio-1',
+    title: 'Reconocimiento Artesanía Colombiana',
+    src: '/media/shirley-creadora-800x1000.webp',
+    alt: 'Shirley recibiendo reconocimiento por su labor artesanal',
     isFeatured: true,
   },
   {
-    id: 'taller-2',
-    title: 'Primeras Creaciones Tejidas',
-    src: '/media/WhatsApp%20Image%202026-07-29%20at%2011.35.55%20PM%20(2)-800x1000.webp',
-    alt: 'Piezas terminadas en el taller de tejido de Nénufar',
+    id: 'premio-2',
+    title: 'Mención Especial Diseño Contemporáneo',
+    src: '/media/Embera-800x1000.webp',
+    alt: 'Pieza galardonada en concurso de diseño',
   },
   {
-    id: 'taller-3',
-    title: 'Herramientas & Hilos Calibrados',
-    src: '/media/Collar%20Naranja-800x1000.webp',
-    alt: 'Detalle de hilado en clase práctica de mostacilla',
-  },
-  {
-    id: 'taller-4',
-    title: 'Clase Práctica de Enfilado',
-    src: '/media/WhatsApp%20Image%202026-07-29%20at%2011.35.54%20PM-800x1000.webp',
-    alt: 'Clase práctica de mostacilla en Cartagena',
-  },
-  {
-    id: 'taller-5',
-    title: 'Círculo de Tejedoras en Getsemaní',
-    src: '/media/WhatsApp%20Image%202026-07-29%20at%2011.35.53%20PM-2-800x1000.webp',
-    alt: 'Círculo de tejedoras en taller',
-  },
-  {
-    id: 'taller-6',
-    title: 'Detalle de Puntadas y Paciencia',
-    src: '/media/WhatsApp%20Image%202026-07-29%20at%2011.35.53%20PM-800x1000.webp',
-    alt: 'Detalle de tejido en taller Nénufar',
+    id: 'premio-3',
+    title: 'Premio Innovación en Técnica Ancestral',
+    src: '/media/colombia-aretes-800x1000.webp',
+    alt: 'Reconocimiento a la innovación en tejido de mostacilla',
   },
 ]
 
@@ -176,7 +158,7 @@ const SHIRLEY_IMAGES: GalleryImageItem[] = [
 const ALL_IMAGES: GalleryImageItem[] = [
   ...CLIENTAS_IMAGES,
   ...FERIAS_IMAGES,
-  ...TALLERES_IMAGES,
+  ...PREMIOS_IMAGES,
   ...SHIRLEY_IMAGES,
 ]
 
@@ -197,9 +179,9 @@ const DEFAULT_GALLERY_TABS: GalleryTabItem[] = [
     images: FERIAS_IMAGES,
   },
   {
-    tabTitle: 'Talleres de Tejido',
-    tabSubtitle: 'El arte ancestral de la mostacilla',
-    images: TALLERES_IMAGES,
+    tabTitle: 'Mis Premios',
+    tabSubtitle: 'Reconocimientos y logros',
+    images: PREMIOS_IMAGES,
   },
   {
     tabTitle: 'El Taller & Shirley',

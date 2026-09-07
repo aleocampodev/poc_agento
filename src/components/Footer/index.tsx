@@ -1,10 +1,11 @@
 import type { Footer } from '@/payload-types'
-import { getCachedGlobal } from '@/utilities/getGlobals'
+import { getCachedGlobal, getCachedCategories } from '@/utilities/getGlobals'
 import Link from 'next/link'
 import React from 'react'
 import { LogoIcon } from '@/components/icons/logo'
 
 const { COMPANY_NAME, SITE_NAME } = process.env
+
 
 export function getCurrentCopyrightYear(): string {
   return new Date().getFullYear().toString()
@@ -12,7 +13,13 @@ export function getCurrentCopyrightYear(): string {
 
 export async function Footer() {
   const copyrightDate = getCurrentCopyrightYear()
-  const copyrightName = COMPANY_NAME || SITE_NAME || 'Nenúfar'
+  const copyrightName = COMPANY_NAME || SITE_NAME || 'Nénufar'
+
+  let categories: { id: number | string; title: string; slug: string }[] = []
+  try {
+    const fetched = await getCachedCategories()
+    if (fetched) categories = fetched
+  } catch (_) {}
 
   return (
     <footer className="bg-[#3B032F] text-white border-t border-white/10 mt-auto">
@@ -20,9 +27,8 @@ export async function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 lg:gap-12 py-16 lg:py-20">
           {/* Columna 1: Marca & Filosofía */}
           <div className="space-y-4">
-            <Link className="flex items-center gap-2.5 sm:gap-3 group" href="/">
-              <LogoIcon variant="blanco" className="w-8 h-8 shrink-0 transition-transform group-hover:scale-105" />
-              <span className="font-serif text-2xl sm:text-3xl tracking-wide text-white font-medium leading-none select-none group-hover:text-[#FF4FA3] transition-colors">Nenúfar</span>
+            <Link className="flex items-center group py-1" href="/">
+              <LogoIcon variant="blanco-horizontal" className="h-7 sm:h-8 w-auto shrink-0 transition-transform group-hover:scale-105" />
             </Link>
             <p className="text-purple-100/90 text-xs sm:text-sm leading-relaxed font-light">
               Joyería de autor tejida a mano con mostacilla calibrada y filigrana en Cartagena de Indias. Piezas con alma caribeña hechas para perdurar.
@@ -34,42 +40,29 @@ export async function Footer() {
             </div>
           </div>
 
-          {/* Columna 2: Colecciones */}
+          {/* Columna 2: Colecciones (dinámicas desde CMS) */}
           <div className="space-y-4">
             <h4 className="font-serif text-base text-white font-medium tracking-wider uppercase">
               Colecciones
             </h4>
             <ul className="space-y-2.5 text-xs sm:text-sm text-purple-100/80 font-light">
-              <li>
-                <Link href="/shop?category=collares" className="hover:text-[#FF4FA3] transition-colors">
-                  Collares & Gargantillas
-                </Link>
-              </li>
-              <li>
-                <Link href="/shop?category=pulseras" className="hover:text-[#FF4FA3] transition-colors">
-                  Pulseras & Manillas
-                </Link>
-              </li>
-              <li>
-                <Link href="/shop?category=aretes" className="hover:text-[#FF4FA3] transition-colors">
-                  Aretes & Candongas
-                </Link>
-              </li>
-              <li>
-                <Link href="/shop?category=ancestrales" className="hover:text-[#FF4FA3] transition-colors">
-                  Ancestrales
-                </Link>
-              </li>
-              <li>
-                <Link href="/shop?category=colibries" className="hover:text-[#FF4FA3] transition-colors">
-                  Colibríes
-                </Link>
-              </li>
-              <li>
-                <Link href="/shop?category=ediciones-especiales" className="hover:text-[#FF4FA3] transition-colors">
-                  Ediciones Especiales
-                </Link>
-              </li>
+              {categories.length > 0 ? (
+                categories.map((cat) => (
+                  <li key={cat.slug}>
+                    <Link href={`/shop?category=${cat.slug}`} className="hover:text-[#FF4FA3] transition-colors">
+                      {cat.title}
+                    </Link>
+                  </li>
+                ))
+              ) : (
+                <>
+                  <li>
+                    <Link href="/shop" className="hover:text-[#FF4FA3] transition-colors">
+                      Ver catálogo completo
+                    </Link>
+                  </li>
+                </>
+              )}
               <li>
                 <Link href="/#talleres" className="hover:text-[#FF4FA3] transition-colors">
                   Talleres & Ferias

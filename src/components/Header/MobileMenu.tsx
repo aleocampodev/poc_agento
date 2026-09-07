@@ -84,18 +84,55 @@ export function MobileMenu({ menu, categories = [] }: Props) {
             <Link
               href="/"
               onClick={closeMobileMenu}
-              className="flex items-center gap-2.5 group"
+              className="flex items-center group py-1"
             >
-              <LogoIcon variant="negro" className="w-7 h-7 shrink-0 inline-block" />
-              <span className="font-serif text-2xl tracking-wide font-medium text-[#1A0E2E] leading-none select-none">
-                Nenúfar
-              </span>
+              <LogoIcon variant="color" className="h-7 w-auto shrink-0 inline-block" />
             </Link>
           </SheetTitle>
         </SheetHeader>
 
         <div className="py-5 space-y-4">
           <ul className="flex flex-col space-y-2">
+
+            <li>
+              <Link
+                href="/#historia"
+                onClick={(e) => handleAnchorClick(e, '/#historia')}
+                className="block py-2 text-sm font-medium uppercase tracking-wider text-neutral-800 dark:text-neutral-200 hover:text-brand transition-colors"
+              >
+                Mi Historia
+              </Link>
+            </li>
+
+            <li>
+              <Link
+                href="/#testimonios"
+                onClick={(e) => handleAnchorClick(e, '/#testimonios')}
+                className="block py-2 text-sm font-medium uppercase tracking-wider text-neutral-800 dark:text-neutral-200 hover:text-brand transition-colors"
+              >
+                Testimonios
+              </Link>
+            </li>
+
+            <li>
+              <Link
+                href="/#talleres"
+                onClick={(e) => handleAnchorClick(e, '/#talleres')}
+                className="block py-2 text-sm font-medium uppercase tracking-wider text-neutral-800 dark:text-neutral-200 hover:text-brand transition-colors"
+              >
+                Talleres & Ferias
+              </Link>
+            </li>
+
+            <li>
+              <Link
+                href="/galeria"
+                onClick={closeMobileMenu}
+                className="block py-2 text-sm font-medium uppercase tracking-wider text-neutral-800 dark:text-neutral-200 hover:text-brand transition-colors"
+              >
+                Galería
+              </Link>
+            </li>
 
             {/* Catálogo con categorías */}
             <li className="border-y border-neutral-100 py-2">
@@ -145,41 +182,11 @@ export function MobileMenu({ menu, categories = [] }: Props) {
 
             <li>
               <Link
-                href="/galeria"
-                onClick={closeMobileMenu}
-                className="block py-2 text-sm font-medium uppercase tracking-wider text-neutral-800 dark:text-neutral-200 hover:text-brand transition-colors"
-              >
-                Galería de Creaciones
-              </Link>
-            </li>
-
-            <li>
-              <Link
-                href="/#historia"
-                onClick={(e) => handleAnchorClick(e, '/#historia')}
-                className="block py-2 text-sm font-medium uppercase tracking-wider text-neutral-800 dark:text-neutral-200 hover:text-brand transition-colors"
-              >
-                Nuestra Historia
-              </Link>
-            </li>
-
-            <li>
-              <Link
-                href="/#talleres"
-                onClick={(e) => handleAnchorClick(e, '/#talleres')}
-                className="block py-2 text-sm font-medium uppercase tracking-wider text-neutral-800 dark:text-neutral-200 hover:text-brand transition-colors"
-              >
-                Talleres & Ferias
-              </Link>
-            </li>
-
-            <li>
-              <Link
                 href="/#contacto"
                 onClick={(e) => handleAnchorClick(e, '/#contacto')}
                 className="block py-2 text-sm font-medium uppercase tracking-wider text-neutral-800 dark:text-neutral-200 hover:text-brand transition-colors"
               >
-                Contacto & Pedidos
+                Contáctame
               </Link>
             </li>
           </ul>

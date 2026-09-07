@@ -90,7 +90,7 @@ html[data-theme='dark'] {
 /* Hover de filas/listados con calidez */
 a[class*='card']:hover,
 .row:hover {
-  background-color: var(--color-base-50);
+  background-color: rgba(233, 30, 140, 0.06);
 }
 
 /* Scrollbar discreta acorde al tema */
@@ -206,7 +206,7 @@ header .avatar {
 .card:hover,
 [class*='card-']:hover {
   border-color: var(--nenufar-brand) !important;
-  background-color: #faf7fc !important;
+  background-color: rgba(233, 30, 140, 0.08) !important;
   box-shadow: 0 8px 24px -4px rgba(233, 30, 140, 0.12);
 }
 

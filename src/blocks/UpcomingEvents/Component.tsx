@@ -30,13 +30,14 @@ export const UpcomingEventsBlock: React.FC<UpcomingEventsBlockProps> = async ({
   videoCaption,
   events,
   googleCalendarIcalUrl,
-  syncWithGoogleCalendar = true,
+  syncWithGoogleCalendar = false,
   id,
 }) => {
   let eventsList: EventItem[] = []
   let isGoogleCalendarSynced = false
 
-  // 1. Sincronización automática con Google Calendar de Shirley (prioridad)
+  // 1. Optional inbound sync from Shirley's Google Calendar (opt-in only,
+  // so her personal calendar never floods the site by default)
   if (syncWithGoogleCalendar !== false) {
     try {
       const gcalRes = await fetchGoogleCalendarEvents(googleCalendarIcalUrl)
